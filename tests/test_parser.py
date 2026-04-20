@@ -22,7 +22,7 @@ from parser import get_jpy_buy_rate
 #     </div>
 #   </div>
 #
-# get_jpy_buy_rate() returns the buy rate as a float (RUB per 100 JPY).
+# get_jpy_buy_rate() returns the sell rate (продажа) as a float (RUB per 100 JPY) — what you pay to buy yen.
 
 FAKE_HTML = """
 <html><body>
@@ -89,7 +89,7 @@ def test_get_jpy_buy_rate_returns_float():
         mock_get.return_value = mock_response
         rate = get_jpy_buy_rate()
     assert isinstance(rate, float)
-    assert rate == 46.22
+    assert rate == 51.5
 
 
 def test_get_jpy_buy_rate_raises_if_not_found():

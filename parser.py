@@ -40,13 +40,13 @@ def get_jpy_buy_rate() -> float:
             # Found the JPY row — its parent is currency-table__tr
             row = name_td.parent
             tds = row.find_all("div", class_="currency-table__td")
-            # tds[0] = currency name, tds[1] = покупка (buy), tds[2] = продажа (sell)
-            if len(tds) >= 2:
-                buy_td = tds[1]
+            # tds[0] = currency name, tds[1] = покупка (bank buys), tds[2] = продажа (bank sells = we buy)
+            if len(tds) >= 3:
+                sell_td = tds[2]
                 # The rate is a direct text node (not inside a child element)
-                raw = buy_td.get_text(strip=True)
-                # Remove the header text "покупка" from the beginning
-                head = buy_td.find("div", class_="currency-table__head")
+                raw = sell_td.get_text(strip=True)
+                # Remove the header text "продажа" from the beginning
+                head = sell_td.find("div", class_="currency-table__head")
                 if head:
                     raw = raw.replace(head.get_text(strip=True), "").strip()
                 raw = raw.replace(",", ".").replace("\xa0", "").strip()
