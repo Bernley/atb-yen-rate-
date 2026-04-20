@@ -74,9 +74,11 @@ class App(tk.Tk):
         frame.pack(pady=8, padx=30, fill="x")
 
         self.yen_var = tk.StringVar()
+        self._updating = False
         self.yen_var.trace("w", self.on_yen_change)
         yen_entry = tk.Entry(frame, textvariable=self.yen_var, font=("Helvetica", 18, "bold"),
                              bd=1, relief="solid", fg="#1a1a1a", justify="right")
+        self._yen_entry = yen_entry
         yen_entry.pack(fill="x", ipady=8)
 
         tk.Label(self, text="¥  →", bg="#f0f2f5", fg="#aaaaaa",
@@ -93,10 +95,24 @@ class App(tk.Tk):
         self.refresh_btn.pack(padx=30, pady=16, fill="x")
 
     def on_yen_change(self, *_):
+        if self._updating:
+            return
+        raw = self.yen_var.get().replace(" ", "").replace("\xa0", "")
+        digits = "".join(c for c in raw if c.isdigit())
+        if digits:
+            formatted = f"{int(digits):,}".replace(",", " ")
+        else:
+            formatted = ""
+        if formatted != self.yen_var.get():
+            self._updating = True
+            cursor = self._yen_entry.index(tk.INSERT)
+            self.yen_var.set(formatted)
+            self._yen_entry.icursor(min(cursor, len(formatted)))
+            self._updating = False
         if self.rate is None:
             return
         try:
-            yen = float(self.yen_var.get().replace(" ", "").replace(",", ".") or 0)
+            yen = int(digits) if digits else 0
             rub = yen * self.rate / 100
             self.rub_label.config(text=f"{rub:,.2f} ₽".replace(",", " "))
         except ValueError:
