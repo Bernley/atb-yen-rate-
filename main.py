@@ -31,9 +31,9 @@ async def index(request: Request):
     )
 
     return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
+        request=request,
+        name="index.html",
+        context={
             "rate": _cache["rate"],
             "updated": updated,
             "error": _cache["error"],
