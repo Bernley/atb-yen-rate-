@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html>
+<body>
+{% if error and rate is none %}
+  <p>Не удалось получить курс</p>
+{% else %}
+  <p>{{ rate }}</p>
+  <p>{{ updated }}</p>
+{% endif %}
+</body>
+</html>
