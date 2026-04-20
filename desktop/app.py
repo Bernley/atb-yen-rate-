@@ -44,7 +44,7 @@ class App(tk.Tk):
     def _build_ui(self):
         # Bank name
         tk.Label(self, text="АТБ БАНК", bg="#f0f2f5", fg="#888888",
-                 font=("Helvetica", 10, "normal"), letter_spacing=2).pack(pady=(40, 4))
+                 font=("Helvetica", 10, "normal")).pack(pady=(40, 4))
 
         tk.Label(self, text="Курс покупки иены", bg="#f0f2f5", fg="#333333",
                  font=("Helvetica", 16, "bold")).pack(pady=(0, 6))
