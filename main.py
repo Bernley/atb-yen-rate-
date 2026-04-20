@@ -2,10 +2,12 @@ import time
 from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from parser import get_jpy_buy_rate
 
 app = FastAPI()
+app.mount("/static", StaticFiles(directory="templates"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 CACHE_TTL = 3600
