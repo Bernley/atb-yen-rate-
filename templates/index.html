@@ -52,6 +52,27 @@
   .result-wrap { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #1a1a1a; border-radius: 12px; color: white; }
   .result-label { font-size: 13px; color: #888; }
   .result-value { font-size: 24px; font-weight: 700; }
+  .refresh-btn {
+    margin-top: 20px;
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: 14px;
+    color: #555;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .refresh-btn:active { background: #f0f0f0; }
+  .refresh-btn.loading { opacity: 0.5; pointer-events: none; }
+  .spin { display: inline-block; transition: transform 0.6s; }
+  .refresh-btn.loading .spin { animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   @media (max-width: 390px) {
     .rate { font-size: 60px; }
@@ -93,10 +114,29 @@
       </div>
     </div>
   {% endif %}
+
+  <button class="refresh-btn" onclick="refreshRate(this)">
+    <span class="spin">↻</span> Обновить курс
+  </button>
 </div>
 
 <script>
-  const rate = {{ rate or 0 }};
+  let rate = {{ rate or 0 }};
+  async function refreshRate(btn) {
+    btn.classList.add('loading');
+    try {
+      const res = await fetch('/refresh', { method: 'POST' });
+      const data = await res.json();
+      if (data.rate) {
+        rate = data.rate;
+        document.querySelector('.rate').textContent = data.rate.toFixed(2);
+        document.querySelector('.updated').textContent = data.updated;
+        document.querySelector('.badge, .error-badge').className = 'badge';
+        document.querySelector('.badge').textContent = '● Актуально';
+      }
+    } catch(e) {}
+    btn.classList.remove('loading');
+  }
   function fmt(n) {
     return n.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }

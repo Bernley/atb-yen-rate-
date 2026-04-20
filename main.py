@@ -15,6 +15,20 @@ CACHE_TTL = 3600
 _cache: dict = {"rate": None, "updated_at": 0.0, "error": False}
 
 
+@app.post("/refresh")
+async def refresh():
+    _cache["rate"] = None
+    _cache["updated_at"] = 0.0
+    _cache["error"] = False
+    try:
+        _cache["rate"] = get_jpy_buy_rate()
+        _cache["updated_at"] = time.time()
+        return {"rate": _cache["rate"], "updated": datetime.fromtimestamp(_cache["updated_at"]).strftime("%d %B %Y, %H:%M")}
+    except Exception:
+        _cache["error"] = True
+        return {"error": "Не удалось получить курс"}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     now = time.time()
