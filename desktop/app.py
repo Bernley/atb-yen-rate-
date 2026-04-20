@@ -1,20 +1,21 @@
 import sys
 import os
-import platform
 import tkinter as tk
 import threading
 import httpx
 from bs4 import BeautifulSoup
 from PIL import Image, ImageTk
 
-USE_BG = platform.system() == "Windows"
-
 ATB_URL = "https://atb.su/services/exchange/"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
 }
 
-W, H = 400, 600
+W, H = 800, 520
+CARD_W, CARD_H = 340, 480
+CARD_X = (W - CARD_W) // 2
+CARD_Y = (H - CARD_H) // 2
+CARD_R = 16  # border radius approximation
 
 
 def resource_path(name):
@@ -44,17 +45,19 @@ def get_jpy_rate():
     raise ValueError("JPY rate not found")
 
 
-def build_background(w, h):
-    bg = Image.open(resource_path("bg.jpg")).convert("RGB").resize((w, h), Image.LANCZOS)
-    # Semi-transparent white card area
-    card_w, card_h = 340, 520
-    cx = (w - card_w) // 2
-    cy = (h - card_h) // 2
+def build_bg(w, h, cx, cy, cw, ch):
+    src = Image.open(resource_path("bg.jpg")).convert("RGB")
+    scale = max(w / src.width, h / src.height)
+    nw, nh = int(src.width * scale), int(src.height * scale)
+    src = src.resize((nw, nh), Image.LANCZOS)
+    left = (nw - w) // 2
+    top = (nh - h) // 2
+    bg = src.crop((left, top, left + w, top + h))
     overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    card = Image.new("RGBA", (card_w, card_h), (255, 255, 255, 128))
+    card = Image.new("RGBA", (cw, ch), (255, 255, 255, 140))
     overlay.paste(card, (cx, cy))
     result = Image.alpha_composite(bg.convert("RGBA"), overlay).convert("RGB")
-    return result, cx, cy, card_w, card_h
+    return ImageTk.PhotoImage(result)
 
 
 class App(tk.Tk):
@@ -66,92 +69,96 @@ class App(tk.Tk):
         self.rate = None
         self._updating = False
 
-        cx, cy, cw, ch = 30, 40, 340, 520
-        if USE_BG:
-            try:
-                composite, cx, cy, cw, ch = build_background(W, H)
-                self._bg_photo = ImageTk.PhotoImage(composite)
-                bg_label = tk.Label(self, image=self._bg_photo, bd=0)
-                bg_label.place(x=0, y=0, width=W, height=H)
-            except Exception as e:
-                print(f"bg error: {e}")
-                self.configure(bg="#f0f2f5")
-        else:
-            self.configure(bg="#f0f2f5")
+        self.canvas = tk.Canvas(self, width=W, height=H, highlightthickness=0)
+        self.canvas.pack(fill="both", expand=True)
 
-        self._build_ui(cx, cy, cw, ch)
+        try:
+            self._photo = build_bg(W, H, CARD_X, CARD_Y, CARD_W, CARD_H)
+            self.canvas.create_image(0, 0, anchor="nw", image=self._photo)
+        except Exception as e:
+            print(f"bg error: {e}")
+            self.canvas.configure(bg="#f0f2f5")
+
+        self._build_ui()
         self.refresh()
 
-    def _lbl(self, text, font, fg, bg="#ffffff"):
-        return tk.Label(self, text=text, font=font, fg=fg, bg=bg, bd=0)
-
-    def _build_ui(self, cx, cy, cw, ch):
-        mid = cx + cw // 2
-        top = cy + 20
+    def _build_ui(self):
+        mid = W // 2
+        y = CARD_Y + 24
 
         # Bank name
-        tk.Label(self, text="АТБ БАНК", font=("Helvetica", 10),
-                 fg="#888888", bg="#f0f2f5", bd=0).place(x=mid, y=top, anchor="n")
+        self.canvas.create_text(mid, y, text="АТБ БАНК",
+                                font=("Helvetica", 10), fill="#888888", anchor="n")
+        y += 26
 
         # Title
-        tk.Label(self, text="Курс покупки иены", font=("Helvetica", 15, "bold"),
-                 fg="#333333", bg="#f0f2f5", bd=0).place(x=mid, y=top+24, anchor="n")
+        self.canvas.create_text(mid, y, text="Курс покупки иены",
+                                font=("Helvetica", 15, "bold"), fill="#1a1a1a", anchor="n")
+        y += 30
 
         # Currency pair
-        tk.Label(self, text="JPY → RUB", font=("Helvetica", 11),
-                 fg="#aaaaaa", bg="#f0f2f5", bd=0).place(x=mid, y=top+52, anchor="n")
+        self.canvas.create_text(mid, y, text="JPY → RUB",
+                                font=("Helvetica", 11), fill="#aaaaaa", anchor="n")
+        y += 26
 
         # Rate
-        self.rate_lbl = tk.Label(self, text="...", font=("Helvetica", 52, "bold"),
-                                  fg="#1a1a1a", bg="#f0f2f5", bd=0)
-        self.rate_lbl.place(x=mid, y=top+80, anchor="n")
+        self._rate_t = self.canvas.create_text(mid, y, text="...",
+                                               font=("Helvetica", 52, "bold"),
+                                               fill="#1a1a1a", anchor="n")
+        y += 72
 
         # Unit
-        tk.Label(self, text="рублей за 100 ¥", font=("Helvetica", 13),
-                 fg="#555555", bg="#f0f2f5", bd=0).place(x=mid, y=top+148, anchor="n")
+        self.canvas.create_text(mid, y, text="рублей за 100 ¥",
+                                font=("Helvetica", 13), fill="#555555", anchor="n")
+        y += 24
 
         # Status
-        self.status_lbl = tk.Label(self, text="Загрузка...", font=("Helvetica", 10),
-                                    fg="#aaaaaa", bg="#f0f2f5", bd=0)
-        self.status_lbl.place(x=mid, y=top+172, anchor="n")
+        self._status_t = self.canvas.create_text(mid, y, text="Загрузка...",
+                                                  font=("Helvetica", 10),
+                                                  fill="#aaaaaa", anchor="n")
+        y += 24
 
         # Divider
-        tk.Frame(self, bg="#e0e0e0", height=1).place(x=cx+20, y=top+200, width=cw-40)
+        self.canvas.create_line(CARD_X + 20, y, CARD_X + CARD_W - 20, y,
+                                fill="#dddddd", width=1)
+        y += 14
 
         # Converter label
-        tk.Label(self, text="КОНВЕРТЕР", font=("Helvetica", 9),
-                 fg="#aaaaaa", bg="#f0f2f5", bd=0).place(x=mid, y=top+215, anchor="n")
+        self.canvas.create_text(mid, y, text="КОНВЕРТЕР",
+                                font=("Helvetica", 9), fill="#aaaaaa", anchor="n")
+        y += 18
 
-        # Yen input
+        # Yen entry
         self.yen_var = tk.StringVar()
         self.yen_var.trace("w", self.on_yen_change)
-        self._yen_entry = tk.Entry(self, textvariable=self.yen_var,
-                                   font=("Helvetica", 20, "bold"),
+        self._yen_entry = tk.Entry(self.canvas, textvariable=self.yen_var,
+                                   font=("Helvetica", 18, "bold"),
                                    bd=1, relief="solid", fg="#1a1a1a",
                                    justify="right", bg="white")
-        self._yen_entry.place(x=cx+20, y=top+240, width=cw-40, height=46)
-
-        # Yen symbol label beside entry
-        tk.Label(self, text="¥", font=("Helvetica", 16),
-                 fg="#aaaaaa", bg="white").place(x=cx+cw-36, y=top+254, anchor="center")
+        self.canvas.create_window(mid, y + 20, window=self._yen_entry,
+                                  width=CARD_W - 30, height=42)
+        self.canvas.create_text(CARD_X + CARD_W - 24, y + 20, text="¥",
+                                font=("Helvetica", 14), fill="#aaaaaa", anchor="center")
+        y += 54
 
         # Result box
-        result_y = top + 305
-        result_frame = tk.Frame(self, bg="#1a1a1a")
-        result_frame.place(x=cx+20, y=result_y, width=cw-40, height=50)
-        tk.Label(result_frame, text="Рублей", font=("Helvetica", 12),
-                 fg="#888888", bg="#1a1a1a").place(x=12, y=14)
-        self.rub_lbl = tk.Label(result_frame, text="— ₽", font=("Helvetica", 20, "bold"),
-                                 fg="white", bg="#1a1a1a")
-        self.rub_lbl.place(x=cw-60, y=10, anchor="ne")
+        self.canvas.create_rectangle(CARD_X + 15, y, CARD_X + CARD_W - 15, y + 46,
+                                     fill="#1a1a1a", outline="", )
+        self.canvas.create_text(CARD_X + 30, y + 23, text="Рублей",
+                                font=("Helvetica", 11), fill="#888888", anchor="w")
+        self._rub_t = self.canvas.create_text(CARD_X + CARD_W - 26, y + 23,
+                                               text="— ₽",
+                                               font=("Helvetica", 18, "bold"),
+                                               fill="white", anchor="e")
+        y += 58
 
         # Refresh button
-        self.refresh_btn = tk.Button(self, text="↻  Обновить курс",
-                                     command=self.refresh,
-                                     bg="white", fg="#555555",
-                                     font=("Helvetica", 12),
-                                     bd=1, relief="solid", cursor="hand2")
-        self.refresh_btn.place(x=cx+20, y=result_y+68, width=cw-40, height=44)
+        self.refresh_btn = tk.Button(self.canvas, text="↻  Обновить курс",
+                                     command=self.refresh, bg="white", fg="#555555",
+                                     font=("Helvetica", 11), bd=1, relief="solid",
+                                     cursor="hand2", activebackground="#f0f0f0")
+        self.canvas.create_window(mid, y + 18, window=self.refresh_btn,
+                                  width=CARD_W - 30, height=38)
 
     def on_yen_change(self, *_):
         if self._updating:
@@ -166,13 +173,13 @@ class App(tk.Tk):
             self._updating = False
         if self.rate and raw:
             rub = int(raw) * self.rate / 100
-            self.rub_lbl.config(text=f"{rub:,.2f} ₽".replace(",", " "))
+            self.canvas.itemconfig(self._rub_t, text=f"{rub:,.2f} ₽".replace(",", " "))
         else:
-            self.rub_lbl.config(text="— ₽")
+            self.canvas.itemconfig(self._rub_t, text="— ₽")
 
     def refresh(self):
         self.refresh_btn.config(state="disabled", text="Загрузка...")
-        self.status_lbl.config(text="Обновление...", fg="#aaaaaa")
+        self.canvas.itemconfig(self._status_t, text="Обновление...", fill="#aaaaaa")
         threading.Thread(target=self._fetch, daemon=True).start()
 
     def _fetch(self):
@@ -184,14 +191,15 @@ class App(tk.Tk):
 
     def _update_rate(self, rate):
         self.rate = rate
-        self.rate_lbl.config(text=f"{rate:.2f}")
-        self.status_lbl.config(text="● Актуально", fg="#2e7d32")
+        self.canvas.itemconfig(self._rate_t, text=f"{rate:.2f}")
+        self.canvas.itemconfig(self._status_t, text="● Актуально", fill="#2e7d32")
         self.refresh_btn.config(state="normal", text="↻  Обновить курс")
         self.on_yen_change()
 
     def _show_error(self):
-        self.rate_lbl.config(text="—")
-        self.status_lbl.config(text="Не удалось получить курс", fg="#e65100")
+        self.canvas.itemconfig(self._rate_t, text="—")
+        self.canvas.itemconfig(self._status_t,
+                               text="Не удалось получить курс", fill="#e65100")
         self.refresh_btn.config(state="normal", text="↻  Обновить курс")
 
 
